@@ -1,0 +1,73 @@
+project_name: clearnotes-discover
+
+before:
+  hooks:
+    - go mod tidy
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}.{{ .Os }}-{{ .Arch }}"
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+      - android
+      - ios
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.commit={{.Commit}
+      - -s -w -X main.date={{.Date}}
+
+source:
+  enabled: true
+
+sboms:
+  - artifacts: archive
+  - id: source
+    artifacts: source
+
+checksum:
+  name_template: 'checksums.txt'
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '-y'
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+    artifacts: checksum
+    output: true
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^test:'
+      - '^chore'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+      - go mod tidy
+
+  groups:
+    - title: 'New Features'
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 10
+    - title: Other work
+      order: 999
