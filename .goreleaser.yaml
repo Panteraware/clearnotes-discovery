@@ -6,6 +6,7 @@ before:
 
 archives:
   - name_template: "{{ .ProjectName }}_{{ .Version }}.{{ .Os }}-{{ .Arch }}"
+    formats: ["tar.gz", "zip", "binary"]
 
 builds:
   - env:
