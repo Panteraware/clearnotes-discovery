@@ -109,9 +109,3 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$BODY" \
             "${{ secrets.DISCORD_PRODUCTION_WEBHOOK }}"
-
-      - name: New Deploy
-        run: |
-          curl \
-            -X POST \
-            "${{ secrets.NEW_RELEASE_PACKAGE }}"
