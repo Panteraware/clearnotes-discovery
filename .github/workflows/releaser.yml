@@ -1,0 +1,123 @@
+name: GoReleaser
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions: read-all
+
+jobs:
+  goreleaser:
+    if: ${{ !contains(github.ref, '-dev') }}
+
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Docker Login
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "^1"
+      - uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+      - uses: anchore/sbom-action/download-syft@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    if: ${{ !contains(github.ref, '-dev') }}
+    needs: goreleaser
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: release
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          repository: ${{ github.repository }}
+          excludes: prerelease, draft
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Announce
+        run: |
+          export TITLE="[$GITHUB_REPOSITORY] New release: $GITHUB_REF_NAME"
+          export VERSION="$GITHUB_REF_NAME"
+          export URL="[View Workflow Run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          export RELEASE_URL="[View Release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME)"
+          export ACTOR_ICON="https://avatars.githubusercontent.com/u/$GITHUB_ACTOR_ID"
+          export REPO="$GITHUB_REPOSITORY"
+
+          BODY="$(jq --null-input '{
+              "embeds": [
+                {
+                  "title": env.TITLE,
+                  "color": 15844367,
+                  "description": "${{ steps.timeseries.outputs.description }}",
+                  "url": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+                  "author": {
+                    "name": env.GITHUB_ACTOR,
+                    "icon_url": env.ACTOR_ICON
+                  },
+                  "fields": [
+                    {
+                      "name": "Version",
+                      "value": env.VERSION,
+                      "inline": true
+                    },
+                    {
+                      "name": "Repo",
+                      "value": env.REPO,
+                      "inline": true
+                    },
+                    {
+                      "name": "Release",
+                      "value": env.RELEASE_URL,
+                      "inline": true
+                    },
+                    {
+                      "name": "Action",
+                      "value": env.URL,
+                      "inline": true
+                    }
+                  ]
+                }
+              ]
+          }')"
+
+          curl \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "${{ secrets.DISCORD_PRODUCTION_WEBHOOK }}"
+
+      - name: New Deploy
+        run: |
+          curl \
+            -X POST \
+            "${{ secrets.NEW_RELEASE_PACKAGE }}"
