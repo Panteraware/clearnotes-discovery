@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/gob"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"slices"
 	"strings"
 	"time"
 )
@@ -34,6 +34,15 @@ type Payload struct {
 	ID        string `json:"id"`
 	Service   string `json:"service"`
 	PublicKey string `json:"public_key"`
+}
+
+type ClientStruct struct {
+	IP            string `json:"ip"`
+	ID            string `json:"id"`
+	PublicKey     string `json:"public_key"`
+	IsPaired      bool   `json:"is_paired"`
+	DiscoveredOn  string `json:"discovered_on"`
+	LastConnected string `json:"last_connected"`
 }
 
 var payload Payload
@@ -59,7 +68,7 @@ func main() {
 	}
 
 	payload = Payload{
-		ID:        string(id),
+		ID:        strings.TrimSpace(string(id)),
 		Service:   "clearnotes",
 		PublicKey: string(publicKey),
 	}
@@ -112,7 +121,8 @@ func Client() {
 			return
 		}
 
-		payload := DecodeToPayload(buf[:n])
+		resPayload := DecodeToPayload(buf[:n])
+		ip := strings.Split(addr.String(), ":")[0]
 
 		content, err := os.ReadFile(DataPath + "/clients.txt")
 		if err != nil {
@@ -120,15 +130,46 @@ func Client() {
 			return
 		}
 
-		clients := strings.Split(string(content), "\n")
+		var clients []ClientStruct
 
-		if !slices.Contains(clients, strings.Split(addr.String(), ":")[0]) {
-			clients = append(clients, strings.Split(addr.String(), ":")[0])
+		err = json.Unmarshal(content, &clients)
+		if err != nil {
+			log.Fatal("[CLIENT] Error parsing clients.txt:", err)
 		}
 
-		err = os.WriteFile(DataPath+"/clients.txt", []byte(strings.Join(clients, "\n")), 0664)
+		for _, client := range clients {
+			if client.IP != ip && resPayload.ID != payload.ID {
+				clients = append(clients, ClientStruct{
+					IP:            strings.TrimSpace(ip),
+					ID:            strings.TrimSpace(resPayload.ID),
+					PublicKey:     resPayload.PublicKey,
+					DiscoveredOn:  time.Now().UTC().Format(time.RFC3339),
+					LastConnected: time.Now().UTC().Format(time.RFC3339),
+				})
+			}
+		}
 
-		fmt.Printf("[CLIENT] Received message from %s (%s): %s\n", addr.String(), strings.Trim(payload.ID, "\n"), payload.Service)
+		if len(clients) == 0 && resPayload.ID != payload.ID {
+			clients = append(clients, ClientStruct{
+				IP:            strings.TrimSpace(ip),
+				ID:            strings.TrimSpace(resPayload.ID),
+				PublicKey:     resPayload.PublicKey,
+				DiscoveredOn:  time.Now().UTC().Format(time.RFC3339),
+				LastConnected: time.Now().UTC().Format(time.RFC3339),
+			})
+		}
+
+		b, err := json.Marshal(clients)
+		if err != nil {
+			log.Fatal("[CLIENT] Error marshalling clients:", err)
+		}
+
+		err = os.WriteFile(DataPath+"/clients.txt", b, 0664)
+		if err != nil {
+			log.Fatal("[CLIENT] Error writing clients.txt:", err)
+		}
+
+		fmt.Printf("[CLIENT] Received message from %s (%s): %s\n", addr.String(), strings.Trim(resPayload.ID, "\n"), resPayload.Service)
 	}
 }
 
