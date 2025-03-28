@@ -2,7 +2,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/gob"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -46,6 +51,10 @@ func main() {
 	payload = Payload{
 		ID:      string(id),
 		Service: "clearnotes",
+	}
+
+	if _, err := os.Stat(DataPath + "/private.pem"); errors.Is(err, os.ErrNotExist) {
+		GenerateKeyPair()
 	}
 
 	go Server()
@@ -134,4 +143,50 @@ func DecodeToPayload(s []byte) Payload {
 		log.Fatal(err)
 	}
 	return p
+}
+
+func GenerateKeyPair() {
+	privatekey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		fmt.Printf("Cannot generate RSA key\n")
+		os.Exit(1)
+	}
+	publickey := &privatekey.PublicKey
+
+	var privateKeyBytes []byte = x509.MarshalPKCS1PrivateKey(privatekey)
+	privateKeyBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privateKeyBytes,
+	}
+	privatePem, err := os.Create(DataPath + "/private.pem")
+	if err != nil {
+		fmt.Printf("error when create private.pem: %s \n", err)
+		os.Exit(1)
+	}
+	err = pem.Encode(privatePem, privateKeyBlock)
+	if err != nil {
+		fmt.Printf("error when encode private pem: %s \n", err)
+		os.Exit(1)
+	}
+
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publickey)
+	if err != nil {
+		fmt.Printf("error when dumping publickey: %s \n", err)
+		os.Exit(1)
+	}
+	publicKeyBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	}
+
+	publicPem, err := os.Create(DataPath + "/public.pem")
+	if err != nil {
+		fmt.Printf("error when create public.pem: %s \n", err)
+		os.Exit(1)
+	}
+	err = pem.Encode(publicPem, publicKeyBlock)
+	if err != nil {
+		fmt.Printf("error when encode public pem: %s \n", err)
+		os.Exit(1)
+	}
 }
