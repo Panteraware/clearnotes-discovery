@@ -31,8 +31,9 @@ const (
 )
 
 type Payload struct {
-	ID      string `json:"id"`
-	Service string `json:"service"`
+	ID        string `json:"id"`
+	Service   string `json:"service"`
+	PublicKey string `json:"public_key"`
 }
 
 var payload Payload
@@ -48,13 +49,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	payload = Payload{
-		ID:      string(id),
-		Service: "clearnotes",
-	}
-
 	if _, err := os.Stat(DataPath + "/private.pem"); errors.Is(err, os.ErrNotExist) {
 		GenerateKeyPair()
+	}
+
+	publicKey, err := os.ReadFile(DataPath + "/public.pem")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	payload = Payload{
+		ID:        string(id),
+		Service:   "clearnotes",
+		PublicKey: string(publicKey),
 	}
 
 	go Server()
