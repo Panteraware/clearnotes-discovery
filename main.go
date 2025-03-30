@@ -58,11 +58,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if _, err := os.Stat(DataPath + "/private.pem"); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path.Clean(DataPath + "/private.pem")); errors.Is(err, os.ErrNotExist) {
 		GenerateKeyPair()
 	}
 
-	publicKey, err := os.ReadFile(DataPath + "/public.pem")
+	publicKey, err := os.ReadFile(path.Clean(DataPath + "/public.pem"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func Client() {
 		resPayload := DecodeToPayload(buf[:n])
 		ip := strings.Split(addr.String(), ":")[0]
 
-		content, err := os.ReadFile(DataPath + "/clients.txt")
+		content, err := os.ReadFile(path.Clean(DataPath + "/clients.txt"))
 		if err != nil {
 			fmt.Println("[CLIENT] Error reading from clients.txt:", err)
 			return
@@ -164,7 +164,7 @@ func Client() {
 			log.Fatal("[CLIENT] Error marshalling clients:", err)
 		}
 
-		err = os.WriteFile(DataPath+"/clients.txt", b, 0664)
+		err = os.WriteFile(path.Clean(DataPath+"/clients.txt"), b, 0664)
 		if err != nil {
 			log.Fatal("[CLIENT] Error writing clients.txt:", err)
 		}
@@ -206,7 +206,7 @@ func GenerateKeyPair() {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: privateKeyBytes,
 	}
-	privatePem, err := os.Create(DataPath + "/private.pem")
+	privatePem, err := os.Create(path.Clean(DataPath + "/private.pem"))
 	if err != nil {
 		fmt.Printf("error when create private.pem: %s \n", err)
 		os.Exit(1)
@@ -227,7 +227,7 @@ func GenerateKeyPair() {
 		Bytes: publicKeyBytes,
 	}
 
-	publicPem, err := os.Create(DataPath + "/public.pem")
+	publicPem, err := os.Create(path.Clean(DataPath + "/public.pem"))
 	if err != nil {
 		fmt.Printf("error when create public.pem: %s \n", err)
 		os.Exit(1)
